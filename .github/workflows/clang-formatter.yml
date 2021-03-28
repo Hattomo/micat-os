@@ -12,6 +12,7 @@ jobs:
       with:
         source: '.'
         clangFormatVersion: 10
+        exclude: './kernel/usb'
         #exclude: './third_party ./external'
         #extensions: 'h,cpp'
         #style: google
