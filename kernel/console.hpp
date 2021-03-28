@@ -17,4 +17,5 @@ class Console {
     const PixelColor fg_color_, bg_color_;
     char buffer_[kRows][kColums + 1];
     int cursor_row_, cursor_column_;
+    int margin_row_, margin_column_;
 };
