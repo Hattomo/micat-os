@@ -63,3 +63,6 @@ dkms.conf
 
 # disk img
 *.img
+
+# bin
+*.bin
