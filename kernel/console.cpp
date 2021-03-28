@@ -5,7 +5,7 @@
 Console::Console(PixelWriter &writer, const PixelColor &fg_color,
                  const PixelColor &bg_color)
     : writer_{writer}, fg_color_{fg_color}, bg_color_{bg_color}, buffer_{},
-      cursor_row_{0}, cursor_column_{0}, margin_row_{8}, margin_column_{8} {}
+      cursor_row_{0}, cursor_column_{0}, margin_row_{28}, margin_column_{8} {}
 
 void Console::PutString(const char *s) {
     while (*s) {
@@ -28,7 +28,7 @@ void Console::Newline() {
     } else {
         for (int y = 0; y < 16 * kRows; ++y) {
             for (int x = 0; x < 8 * kColums; ++x) {
-                writer_.Write(x, y, bg_color_);
+                writer_.Write(x + margin_column_, y + margin_row_, bg_color_);
             }
         }
         for (int row = 0; row < kRows - 1; ++row) {

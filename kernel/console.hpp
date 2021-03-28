@@ -4,7 +4,7 @@
 
 class Console {
   public:
-    static const int kRows = 36, kColums = 90;
+    static const int kRows = 35, kColums = 90;
 
     Console(PixelWriter &writer, const PixelColor &fg_color,
             const PixelColor &bg_color);

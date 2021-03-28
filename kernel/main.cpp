@@ -30,6 +30,19 @@ int printk(const char *format, ...) {
     console->PutString(s);
     return result;
 }
+
+// mouse cursor
+const int kMouseCursorWidth = 15;
+const int kMouseCursorHeight = 24;
+const char mouse_cursor_sahpe[kMouseCursorHeight][kMouseCursorWidth + 1] = {
+    ".              ", "..             ", ".@.            ", ".@@.           ",
+    ".@@@.          ", ".@@@@.         ", ".@@@@@.        ", ".@@@@@@.       ",
+    ".@@@@@@@.      ", ".@@@@@@@@.     ", ".@@@@@@@@@.    ", ".@@@@@@@@@@.   ",
+    ".@@@@@@@@@@@.  ", ".@@@@@@@@@@@@. ", ".@@@@@@........", ".@@@@@@.       ",
+    ".@@@@..@.      ", ".@@@. .@.      ", ".@@.   .@.     ", ".@.    .@.     ",
+    "..      .@.    ", ".       .@.    ", "         .@.   ", "         ...   ",
+};
+
 // #@@range_begin(call_write_pixel)
 extern "C" void KernelMain(const FrameBufferConfig &frame_buffer_config) {
     switch (frame_buffer_config.pixel_format) {
@@ -44,30 +57,42 @@ extern "C" void KernelMain(const FrameBufferConfig &frame_buffer_config) {
     default:
         break;
     }
-
-    for (int x = 0; x < frame_buffer_config.horizontal_resolution; ++x) {
-        for (int y = 0; y < frame_buffer_config.vertical_resolution; ++y) {
-            pixel_writer->Write(x, y,
-                                {(uint8_t)(y * x % 255), (uint8_t)(y * 5 % 255),
-                                 (uint8_t)(3 * x % 255)});
-        }
-    }
-    for (int x = 0; x < frame_buffer_config.horizontal_resolution; ++x) {
-        for (int y = 0; y < 100; ++y) {
-            pixel_writer->Write(x, y, {0, 255, 0});
-        }
-    }
+    // black screen
+    FillReactangle(*pixel_writer, {0, 0},
+                   {(int)frame_buffer_config.horizontal_resolution,
+                    (int)frame_buffer_config.vertical_resolution},
+                   {0, 0, 0});
+    console = new (console_buf)
+        Console(*pixel_writer, {255, 255, 255}, {45, 118, 237});
+    FillReactangle(*pixel_writer, {0, 0},
+                   {(int)frame_buffer_config.horizontal_resolution,
+                    (int)frame_buffer_config.vertical_resolution},
+                   {45, 118, 237});
+    FillReactangle(*pixel_writer, {0, 0},
+                   {(int)frame_buffer_config.horizontal_resolution, 20},
+                   {119, 197, 255});
     // Write A
     int i = 0;
     for (char c = '!'; c <= '~'; ++c, ++i) {
         WriteAscii(*pixel_writer, 8 * i, 50, c, {0, 0, 0});
     }
     WriteString(*pixel_writer, 0, 66, "Hello world!!", {0, 0, 255});
-    console =
-        new (console_buf) Console(*pixel_writer, {0, 0, 0}, {255, 255, 255});
     for (int i = 0; i < 40; ++i) {
         printk("printk%d\n", i);
     }
+
+    for (int dy = 0; dy < kMouseCursorHeight; ++dy) {
+        for (int dx = 0; dx < kMouseCursorWidth; ++dx) {
+            if (mouse_cursor_sahpe[dy][dx] == '@') {
+                pixel_writer->Write(200 + dx, 100 + dy, {0, 0, 0});
+            } else if (mouse_cursor_sahpe[dy][dx] == '.') {
+                pixel_writer->Write(200 + dx, 100 + dy, {255, 255, 255});
+            }
+        }
+    }
+
+    FillReactangle(*pixel_writer, {50, 50}, {10, 10}, {255, 0, 255});
+    DrawReactangle(*pixel_writer, {150, 150}, {150, 150}, {255, 0, 255});
     while (1) {
         __asm__("hlt");
     }
