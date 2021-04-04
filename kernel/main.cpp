@@ -3,6 +3,7 @@
 #include "frame_buffer_config.hpp"
 #include "graphics.hpp"
 #include "newlib_support.c"
+#include "pci.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -11,7 +12,7 @@
 char pixel_writer_buf[sizeof(RGBResv8BitPerColorPixelWriter)];
 PixelWriter *pixel_writer;
 
-void *operator new(size_t size, void *buf) { return buf; }
+// void *operator new(size_t size, void *buf) { return buf; }
 void operator delete(void *obj) noexcept {}
 
 // console
@@ -94,6 +95,18 @@ extern "C" void KernelMain(const FrameBufferConfig &frame_buffer_config) {
     FillReactangle(*pixel_writer, {50, 50}, {10, 10}, {255, 0, 255});
     DrawReactangle(*pixel_writer, {150, 150}, {150, 150}, {255, 0, 255});
     DrawCircle(*pixel_writer, {250, 250}, 100, {34, 0, 255});
+
+    auto err = pci::ScanAllBus();
+    printk("ScanAllBus: %s\n", err.Name());
+
+    for (int i = 0; i < pci::num_device; ++i) {
+        const auto &dev = pci::devices[i];
+        auto vender_id = pci::ReadVenderId(dev.bus, dev.device, dev.function);
+        auto class_code = pci::ReadClassCode(dev.bus, dev.device, dev.function);
+        printk("%d.%d.%d: vend %04x, class %08x, head %02x\n", dev.bus,
+               dev.device, dev.function, vender_id, class_code,
+               dev.header_type);
+    }
     while (1) {
         __asm__("hlt");
     }
