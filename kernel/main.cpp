@@ -93,6 +93,7 @@ extern "C" void KernelMain(const FrameBufferConfig &frame_buffer_config) {
 
     FillReactangle(*pixel_writer, {50, 50}, {10, 10}, {255, 0, 255});
     DrawReactangle(*pixel_writer, {150, 150}, {150, 150}, {255, 0, 255});
+    DrawCircle(*pixel_writer, {250, 250}, 100, {34, 0, 255});
     while (1) {
         __asm__("hlt");
     }
