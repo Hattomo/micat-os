@@ -63,6 +63,9 @@ dkms.conf
 
 # disk img
 *.img
+*.elf
+*.EFI
+*.efi
 
 # bin
 *.bin

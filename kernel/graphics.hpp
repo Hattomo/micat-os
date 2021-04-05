@@ -49,5 +49,5 @@ void FillReactangle(PixelWriter &writer, const Vector2D<int> &pos,
                     const Vector2D<int> &size, const PixelColor &c);
 void DrawReactangle(PixelWriter &writer, const Vector2D<int> &pos,
                     const Vector2D<int> &size, const PixelColor &c);
-void DrawCircle(PixelWriter &writer, const Vector2D<int> &pos,
-                const int &size, const PixelColor &c);
+void DrawCircle(PixelWriter &writer, const Vector2D<int> &pos, const int &size,
+                const PixelColor &c);

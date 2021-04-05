@@ -39,12 +39,12 @@ void DrawReactangle(PixelWriter &writer, const Vector2D<int> &pos,
 }
 
 // Draw Circle
-void DrawCircle(PixelWriter &writer, const Vector2D<int> &pos,
-                const int &size, const PixelColor &c){
-    for (int dy = -size; dy < 2*size;++dy){
-        for (int dx = -size; dx < 2*size; ++dx){
+void DrawCircle(PixelWriter &writer, const Vector2D<int> &pos, const int &size,
+                const PixelColor &c) {
+    for (int dy = -size; dy < 2 * size; ++dy) {
+        for (int dx = -size; dx < 2 * size; ++dx) {
             if (((dx * dx) + (dy * dy)) < size * size) {
-                writer.Write(pos.x + dx, pos.y + dy,c);
+                writer.Write(pos.x + dx, pos.y + dy, c);
             }
         }
     }
