@@ -1,7 +1,9 @@
+#include "asmfunc.h"
 #include "console.hpp"
 #include "font.hpp"
 #include "frame_buffer_config.hpp"
 #include "graphics.hpp"
+#include "interrupt.hpp"
 #include "logger.hpp"
 #include "mouse.hpp"
 #include "newlib_support.c"
@@ -71,6 +73,20 @@ void SwitchEhci2Xhci(const pci::Device &xhc_dev) {
         ehci2xhci_ports);
 }
 
+usb::xhci::Controller *xhc;
+
+// interrupt
+__attribute__((interrupt)) void IntHandlerXHCI(InterruptFrame *frame) {
+    Log(kInfo, "interrupt");
+    while (xhc->PrimaryEventRing()->HasFront()) {
+        if (auto err = ProcessEvent(*xhc)) {
+            Log(kError, "Error while ProcessEvent: %s at %s:%d\n", err.Name(),
+                err.File(), err.Line());
+        }
+    }
+    NotifyEndOfInterrupt();
+}
+
 // #@@range_begin(call_write_pixel)
 extern "C" void KernelMain(const FrameBufferConfig &frame_buffer_config) {
     switch (frame_buffer_config.pixel_format) {
@@ -92,7 +108,7 @@ extern "C" void KernelMain(const FrameBufferConfig &frame_buffer_config) {
                    {0, 0, 0});
     console = new (console_buf)
         Console(*pixel_writer, {255, 255, 255}, kDesktopBGColor);
-    SetLogLevel(kWarn);
+    SetLogLevel(kError);
     FillReactangle(*pixel_writer, {0, 0},
                    {(int)frame_buffer_config.horizontal_resolution,
                     (int)frame_buffer_config.vertical_resolution},
@@ -106,9 +122,6 @@ extern "C" void KernelMain(const FrameBufferConfig &frame_buffer_config) {
         WriteAscii(*pixel_writer, 8 * i, 50, c, {0, 0, 0});
     }
     WriteString(*pixel_writer, 0, 66, "Hello world!!", {0, 0, 255});
-    for (int i = 0; i < 40; ++i) {
-        printk("printk%d\n", i);
-    }
 
     FillReactangle(*pixel_writer, {50, 50}, {10, 10}, {255, 0, 255});
     DrawReactangle(*pixel_writer, {150, 150}, {150, 150}, {255, 0, 255});
@@ -143,6 +156,20 @@ extern "C" void KernelMain(const FrameBufferConfig &frame_buffer_config) {
             xhc_dev->device, xhc_dev->function);
     }
 
+    // Load idt
+    const uint16_t cs = GetCS();
+    SetIDTEntry(idt[InterruptVector::kXHCI],
+                MakeIDTAttr(DescriptorType::kInterruptGate, 0),
+                reinterpret_cast<uint64_t>(IntHandlerXHCI), cs);
+    LoadIDT(sizeof(idt) - 1, reinterpret_cast<uintptr_t>(&idt[0]));
+
+    // Configure MSI
+    const uint8_t bsp_local_apic_id =
+        *reinterpret_cast<const uint32_t *>(0xfee00020) >> 24;
+    pci::ConfigureMSIFixedDestination(
+        *xhc_dev, bsp_local_apic_id, pci::MSITriggerMode::kLevel,
+        pci::MSIDeliveryMode::kFixed, InterruptVector::kXHCI, 0);
+
     const WithError<uint64_t> xhc_bar = pci::ReadBar(*xhc_dev, 0);
     Log(kDebug, "ReadBar: %s\n", xhc_bar.error.Name());
     const uint64_t xhc_mmio_base = xhc_bar.value & ~static_cast<uint64_t>(0xf);
@@ -160,6 +187,10 @@ extern "C" void KernelMain(const FrameBufferConfig &frame_buffer_config) {
 
     Log(kInfo, "xHC starting\n");
     xhc.Run();
+
+    ::xhc = &xhc;
+    __asm__("sti");
+
     usb::HIDMouseDriver::default_observer = MouseObserver;
 
     for (int i = 1; i <= xhc.MaxPorts(); ++i) {
@@ -175,12 +206,13 @@ extern "C" void KernelMain(const FrameBufferConfig &frame_buffer_config) {
         }
     }
 
-    while (1) {
-        if (auto err = ProcessEvent(xhc)) {
-            Log(kError, "Error while ProcessEvent: %s at %s:%d\n", err.Name(),
-                err.File(), err.Line());
-        }
-    }
+    // while (1) {
+    //     if (auto err = ProcessEvent(xhc)) {
+    //         Log(kError, "Error while ProcessEvent: %s at %s:%d\n",
+    //         err.Name(),
+    //             err.File(), err.Line());
+    //     }
+    // }
     while (1) {
         __asm__("hlt");
     }
