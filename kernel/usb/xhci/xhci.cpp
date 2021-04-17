@@ -358,7 +358,7 @@ namespace usb::xhci {
       hcsparams2.bits.max_scratchpad_buffers_low
       | (hcsparams2.bits.max_scratchpad_buffers_high << 5);
     if (max_scratchpad_buffers > 0) {
-      auto scratchpad_buf_arr = AllocArray<void*>(max_scratchpad_buffers, 64, 4096);
+      auto scratchpad_buf_arr = AllocArray<void*>(max_scratchpad_buffers + 10, 64, 4096);
       for (int i = 0; i < max_scratchpad_buffers; ++i) {
         scratchpad_buf_arr[i] = AllocMem(4096, 4096, 4096);
         Log(kDebug, "scratchpad buffer array %d = %p\n",
