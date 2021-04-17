@@ -1,10 +1,10 @@
 #pragma once
 
 enum LogLevel {
-    kError = 3,
-    kWarn = 2,
-    kInfo = 1,
-    kDebug = 0,
+    kError = 10,
+    kWarn = 20,
+    kInfo = 30,
+    kDebug = 40,
 };
 
 void SetLogLevel(LogLevel level);

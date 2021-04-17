@@ -1,5 +1,6 @@
 #include "elf.hpp"
 #include "frame_buffer_config.hpp"
+#include "memory_map.hpp"
 #include <Guid/FileInfo.h>
 #include <Library/BaseMemoryLib.h>
 #include <Library/MemoryAllocationLib.h>
@@ -11,17 +12,6 @@
 #include <Protocol/LoadedImage.h>
 #include <Protocol/SimpleFileSystem.h>
 #include <Uefi.h>
-
-// #@@range_begin(struct_memory_map)
-struct MemoryMap {
-    UINTN buffer_size;
-    VOID *buffer;
-    UINTN map_size;
-    UINTN map_key;
-    UINTN descriptor_size;
-    UINT32 descriptor_version;
-};
-// #@@range_end(struct_memory_map)
 
 // #@@range_begin(get_memory_map)
 EFI_STATUS GetMemoryMap(struct MemoryMap *map) {
@@ -373,9 +363,10 @@ EFI_STATUS EFIAPI UefiMain(EFI_HANDLE image_handle,
         Halt();
     }
 
-    typedef void EntryPointType(const struct FrameBufferConfig *);
+    typedef void EntryPointType(const struct FrameBufferConfig *,
+                                const struct MemoryMap *);
     EntryPointType *entry_point = (EntryPointType *)entry_addr;
-    entry_point(&config);
+    entry_point(&config, &memmap);
     // #@@range_end(pass_frame_buffer_config)
     // #@@range_end(call_kernel)
     Print(L"All done\n");

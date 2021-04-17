@@ -5,6 +5,7 @@
 #include "graphics.hpp"
 #include "interrupt.hpp"
 #include "logger.hpp"
+#include "memory_map.hpp"
 #include "mouse.hpp"
 #include "newlib_support.c"
 #include "pci.hpp"
@@ -91,7 +92,9 @@ __attribute__((interrupt)) void IntHandlerXHCI(InterruptFrame *frame) {
 }
 
 // #@@range_begin(call_write_pixel)
-extern "C" void KernelMain(const FrameBufferConfig &frame_buffer_config) {
+extern "C" void KernelMain(const FrameBufferConfig &frame_buffer_config,
+                           const MemoryMap &memory_map) {
+    // setting display color
     switch (frame_buffer_config.pixel_format) {
     case kPixelRGBResv8BitPerColor:
         pixel_writer = new (pixel_writer_buf)
@@ -111,7 +114,7 @@ extern "C" void KernelMain(const FrameBufferConfig &frame_buffer_config) {
                    {0, 0, 0});
     console = new (console_buf)
         Console(*pixel_writer, {255, 255, 255}, kDesktopBGColor);
-    SetLogLevel(kError);
+    SetLogLevel(kInfo);
     FillReactangle(*pixel_writer, {0, 0},
                    {(int)frame_buffer_config.horizontal_resolution,
                     (int)frame_buffer_config.vertical_resolution},
@@ -132,6 +135,28 @@ extern "C" void KernelMain(const FrameBufferConfig &frame_buffer_config) {
     mouse_cursor = new (mouse_cursor_buf)
         MouseCursor{pixel_writer, {255, 0, 255}, {300, 200}};
 
+    // show avaliable memoery
+    const std::array available_memory_types{
+        MemoryType::kEfiBootServicesCode,
+        MemoryType::kEfiBootServicesData,
+        MemoryType::kEfiConventionalMemory,
+    };
+    printk("memory map: %p\n", &memory_map);
+    for (uintptr_t iter = reinterpret_cast<uintptr_t>(memory_map.buffer);
+         iter < reinterpret_cast<uintptr_t>(memory_map.buffer) +
+                    memory_map.buffer_size;
+         iter += memory_map.descriptor_size) {
+        auto desc = reinterpret_cast<MemoryDescriptor *>(iter);
+        for (int i = 0; i < available_memory_types.size(); ++i) {
+            if (desc->type == available_memory_types[i]) {
+                printk("type = %u, phys = %08lx - %08lx, pages = %lu, attr = "
+                       "%08lx\n",
+                       desc->type, desc->phycal_start,
+                       desc->phycal_start + desc->number_of_pages * 4096 - 1,
+                       desc->number_of_pages, desc->attribute);
+            }
+        }
+    }
     // init intterupt queue
     std::array<Message, 32> main_queue_data;
     ArrayQueue<Message> main_queue{main_queue_data};
