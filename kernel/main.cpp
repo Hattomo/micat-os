@@ -8,8 +8,10 @@
 #include "memory_map.hpp"
 #include "mouse.hpp"
 #include "newlib_support.c"
+#include "paging.hpp"
 #include "pci.hpp"
 #include "queue.hpp"
+#include "segment.hpp"
 #include "usb/classdriver/mouse.hpp"
 #include "usb/device.hpp"
 #include "usb/memory.hpp"
@@ -91,9 +93,14 @@ __attribute__((interrupt)) void IntHandlerXHCI(InterruptFrame *frame) {
     NotifyEndOfInterrupt();
 }
 
+alignas(16) uint8_t kernel_main_stack[1024 * 1024];
+
 // #@@range_begin(call_write_pixel)
-extern "C" void KernelMain(const FrameBufferConfig &frame_buffer_config,
-                           const MemoryMap &memory_map) {
+extern "C" void
+KernelMainNewStack(const FrameBufferConfig &frame_buffer_config_ref,
+                   const MemoryMap &memory_map_ref) {
+    FrameBufferConfig frame_buffer_config{frame_buffer_config_ref};
+    MemoryMap memory_map{memory_map_ref};
     // setting display color
     switch (frame_buffer_config.pixel_format) {
     case kPixelRGBResv8BitPerColor:
@@ -122,6 +129,7 @@ extern "C" void KernelMain(const FrameBufferConfig &frame_buffer_config,
     FillReactangle(*pixel_writer, {0, 0},
                    {(int)frame_buffer_config.horizontal_resolution, 20},
                    kDesktopMenuBarColor);
+
     // Write A
     int i = 0;
     for (char c = '!'; c <= '~'; ++c, ++i) {
@@ -135,29 +143,33 @@ extern "C" void KernelMain(const FrameBufferConfig &frame_buffer_config,
     mouse_cursor = new (mouse_cursor_buf)
         MouseCursor{pixel_writer, {255, 0, 255}, {300, 200}};
 
+    // set up  segment
+    SetupSegments();
+    const uint16_t kernel_cs = 1 << 3;
+    const uint16_t kernel_ss = 2 << 3;
+    SetDSAll(0);
+    SetCSSS(kernel_cs, kernel_ss);
+
+    // setup page table
+    SetupIdentityPageTable();
+
     // show avaliable memoery
-    const std::array available_memory_types{
-        MemoryType::kEfiBootServicesCode,
-        MemoryType::kEfiBootServicesData,
-        MemoryType::kEfiConventionalMemory,
-    };
     printk("memory map: %p\n", &memory_map);
-    for (uintptr_t iter = reinterpret_cast<uintptr_t>(memory_map.buffer);
-         iter < reinterpret_cast<uintptr_t>(memory_map.buffer) +
-                    memory_map.buffer_size;
+    const auto memory_map_base = reinterpret_cast<uintptr_t>(memory_map.buffer);
+    for (uintptr_t iter = memory_map_base;
+         iter < memory_map_base + memory_map.map_size;
          iter += memory_map.descriptor_size) {
         auto desc = reinterpret_cast<MemoryDescriptor *>(iter);
-        for (int i = 0; i < available_memory_types.size(); ++i) {
-            if (desc->type == available_memory_types[i]) {
-                printk("type = %u, phys = %08lx - %08lx, pages = %lu, attr = "
-                       "%08lx\n",
-                       desc->type, desc->phycal_start,
-                       desc->phycal_start + desc->number_of_pages * 4096 - 1,
-                       desc->number_of_pages, desc->attribute);
-            }
+        if (IsAvailable(static_cast<MemoryType>(desc->type))) {
+            printk("type = %u, phys = %08lx - %08lx, pages = %lu, attr = "
+                   "%08lx\n",
+                   desc->type, desc->phycal_start,
+                   desc->phycal_start + desc->number_of_pages * 4096 - 1,
+                   desc->number_of_pages, desc->attribute);
         }
     }
-    // init intterupt queue
+
+    // init interupt queue
     std::array<Message, 32> main_queue_data;
     ArrayQueue<Message> main_queue{main_queue_data};
     ::main_queue = &main_queue;
@@ -191,10 +203,9 @@ extern "C" void KernelMain(const FrameBufferConfig &frame_buffer_config,
     }
 
     // Load idt
-    const uint16_t cs = GetCS();
     SetIDTEntry(idt[InterruptVector::kXHCI],
                 MakeIDTAttr(DescriptorType::kInterruptGate, 0),
-                reinterpret_cast<uint64_t>(IntHandlerXHCI), cs);
+                reinterpret_cast<uint64_t>(IntHandlerXHCI), kernel_cs);
     LoadIDT(sizeof(idt) - 1, reinterpret_cast<uintptr_t>(&idt[0]));
 
     // Configure MSI
