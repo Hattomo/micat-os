@@ -160,7 +160,7 @@ KernelMainNewStack(const FrameBufferConfig &frame_buffer_config_ref,
     // setup memory manager
     ::memory_manager = new (memory_manager_buf) BitmapMemoryManager;
 
-    // show avaliable memoery
+    // setup memory manager::get avaliable memoery
     printk("memory map: %p\n", &memory_map);
     const auto memory_map_base = reinterpret_cast<uintptr_t>(memory_map.buffer);
     uintptr_t available_end = 0;
@@ -184,8 +184,15 @@ KernelMainNewStack(const FrameBufferConfig &frame_buffer_config_ref,
         }
     }
 
+    // start mamory management
     memory_manager->SetMemoryRange(FrameID{1},
                                    FrameID{available_end / kBytesPerFrame});
+
+    if (auto err = InitializeHeap(*memory_manager)) {
+        Log(kError, "failed to allocate pages: %s at %s:%d\n", err.Name(),
+            err.File(), err.Line());
+        exit(1);
+    }
 
     // init interupt queue
     std::array<Message, 32> main_queue_data;
