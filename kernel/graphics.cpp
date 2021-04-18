@@ -49,3 +49,11 @@ void DrawCircle(PixelWriter &writer, const Vector2D<int> &pos, const int &size,
         }
     }
 }
+
+void DrawDesktop(PixelWriter &writer) {
+    const auto width = writer.Width();
+    const auto height = writer.Height();
+
+    FillReactangle(writer, {0, 0}, {width, height}, kDesktopBGColor);
+    FillReactangle(writer, {0, 0}, {width, 20}, kDesktopMenuBarColor);
+}

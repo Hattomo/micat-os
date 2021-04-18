@@ -4,6 +4,7 @@
 #include "frame_buffer_config.hpp"
 #include "graphics.hpp"
 #include "interrupt.hpp"
+#include "layer.hpp"
 #include "logger.hpp"
 #include "memory_manager.hpp"
 #include "memory_map.hpp"
@@ -18,14 +19,12 @@
 #include "usb/memory.hpp"
 #include "usb/xhci/trb.hpp"
 #include "usb/xhci/xhci.hpp"
+#include "window.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <numeric>
 #include <vector>
-
-const PixelColor kDesktopBGColor{45, 118, 237};
-const PixelColor kDesktopMenuBarColor{119, 197, 255};
 
 // pixel writer
 char pixel_writer_buf[sizeof(RGBResv8BitPerColorPixelWriter)];
@@ -54,11 +53,11 @@ int printk(const char *format, ...) {
 char memory_manager_buf[sizeof(BitmapMemoryManager)];
 BitmapMemoryManager *memory_manager;
 
-char mouse_cursor_buf[sizeof(MouseCursor)];
-MouseCursor *mouse_cursor;
-
+unsigned int mouse_layer_id;
 void MouseObserver(int8_t displacement_x, int8_t displacement_y) {
-    mouse_cursor->MoveRelative({displacement_x, displacement_y});
+    layer_manager->MoveRelative(mouse_layer_id,
+                                {displacement_x, displacement_y});
+    layer_manager->Draw();
 }
 
 void SwitchEhci2Xhci(const pci::Device &xhc_dev) {
@@ -123,16 +122,10 @@ KernelMainNewStack(const FrameBufferConfig &frame_buffer_config_ref,
                    {(int)frame_buffer_config.horizontal_resolution,
                     (int)frame_buffer_config.vertical_resolution},
                    {0, 0, 0});
-    console = new (console_buf)
-        Console(*pixel_writer, {255, 255, 255}, kDesktopBGColor);
-    SetLogLevel(kInfo);
-    FillReactangle(*pixel_writer, {0, 0},
-                   {(int)frame_buffer_config.horizontal_resolution,
-                    (int)frame_buffer_config.vertical_resolution},
-                   kDesktopBGColor);
-    FillReactangle(*pixel_writer, {0, 0},
-                   {(int)frame_buffer_config.horizontal_resolution, 20},
-                   kDesktopMenuBarColor);
+    DrawDesktop(*pixel_writer);
+    console = new (console_buf) Console{{255, 255, 255}, kDesktopBGColor};
+    console->SetWriter(pixel_writer);
+    SetLogLevel(kDebug);
 
     // Write A
     int i = 0;
@@ -143,9 +136,7 @@ KernelMainNewStack(const FrameBufferConfig &frame_buffer_config_ref,
 
     FillReactangle(*pixel_writer, {50, 50}, {10, 10}, {255, 0, 255});
     DrawReactangle(*pixel_writer, {150, 150}, {150, 150}, {255, 0, 255});
-    DrawCircle(*pixel_writer, {250, 250}, 100, {34, 0, 255});
-    mouse_cursor = new (mouse_cursor_buf)
-        MouseCursor{pixel_writer, {255, 0, 255}, {300, 200}};
+    // DrawCircle(*pixel_writer, {250, 250}, 100, {34, 0, 255});
 
     // set up  segment
     SetupSegments();
@@ -184,7 +175,7 @@ KernelMainNewStack(const FrameBufferConfig &frame_buffer_config_ref,
         }
     }
 
-    // start mamory management
+    // start memory management
     memory_manager->SetMemoryRange(FrameID{1},
                                    FrameID{available_end / kBytesPerFrame});
 
@@ -275,6 +266,36 @@ KernelMainNewStack(const FrameBufferConfig &frame_buffer_config_ref,
             }
         }
     }
+
+    const int kFrameWidth = frame_buffer_config.horizontal_resolution;
+    const int kFrameHeight = frame_buffer_config.vertical_resolution;
+
+    auto bgwindow = std::make_shared<Window>(kFrameWidth, kFrameHeight);
+    auto bgwriter = bgwindow->Writer();
+
+    DrawDesktop(*bgwriter);
+    console->SetWriter(bgwriter);
+
+    // auto mouse_window =
+    //     std::make_shared<Window>(kMouseCursorWidth, kMouseCursorHeight);
+    // mouse_window->SetTransparentColor(kMouseTransparentColor);
+    // DrawMouseCursor(mouse_window->Writer(), {0, 0});
+
+    auto mouse_window =
+        std::make_shared<Window>(kMouseCursorWidth, kMouseCursorHeight);
+    mouse_window->SetTransparentColor(kMouseTransparentColor);
+    DrawMouseCursor(mouse_window->Writer(), {0, 0});
+
+    layer_manager = new LayerManager;
+    layer_manager->SetWriter(pixel_writer);
+
+    auto bglayer_id =
+        layer_manager->NewLayer().SetWindow(bgwindow).Move({0, 0}).ID();
+    mouse_layer_id =
+        layer_manager->NewLayer().SetWindow(mouse_window).Move({200, 200}).ID();
+    layer_manager->UpDown(bglayer_id, 0);
+    layer_manager->UpDown(mouse_layer_id, 1);
+    layer_manager->Draw();
 
     while (true) {
         __asm__("cli");
